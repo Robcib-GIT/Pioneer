@@ -33,9 +33,13 @@ void microRos::initialize(){
 }
 
 void microRos::publish(){
-    const char* buffer[50] = "Mensaje de prueba"; 
-    serial_monitor_msg.data = buffer; 
-    rcl_publish(&publisher, &serial_monitor_msg, NULL);
+    serial_monitor_msg.data.data = (char *)"Hello World!";
+    serial_monitor_msg.data.size = strlen(serial_monitor_msg.data.data);
+    serial_monitor_msg.data.capacity = serial_monitor_msg.data.size + 1;
+    rcl_ret_t ret = rcl_publish(&publisher, &serial_monitor_msg, NULL);
+    if (ret != RCL_RET_OK) {
+      std::cout<<"Error al publicar el mensaje"<<std::endl;
+    }
 }
 
 // suscriber callback

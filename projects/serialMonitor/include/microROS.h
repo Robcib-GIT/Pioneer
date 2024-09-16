@@ -10,7 +10,7 @@
 #include <geometry_msgs/msg/twist.h>
 #include <std_msgs/msg/string.h>
 
-#include <string.h>
+#include <iostream>
 
 
 class microRos{
