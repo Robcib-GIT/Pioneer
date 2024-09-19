@@ -78,7 +78,6 @@ void loop() {
     Serial.print(v2Filt);
     Serial.println();
 
-    //delay(1);
+    delay(1);
 
 }
-
