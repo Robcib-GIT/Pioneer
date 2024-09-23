@@ -17,13 +17,13 @@
 int8_t L_FORW = 19;
 int8_t L_BACK = 18;
 int8_t L_enablePin = 17;
-int8_t L_encoderPin1 = 33;  //Encoder Output of pin1 must connected with intreput pin of Esp32.
+int8_t L_encoderPin1 = 33;  //Encoder Output of pin1 must connected with interrupt pin of Esp32.
 int8_t L_encoderPin2 = 32;
 //right wheel
 int8_t R_FORW = 23;
 int8_t R_BACK = 22;
 int8_t R_enablePin = 21;
-int8_t R_encoderPin1 = 25;  //Encoder Output of pin1 must connected with intreput pin of Esp32.
+int8_t R_encoderPin1 = 25;  //Encoder Output of pin1 must connected with interrupt pin of Esp32.
 int8_t R_encoderPin2 = 26;
 
 //parameters of the robot
