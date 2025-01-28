@@ -1,7 +1,7 @@
 {
     "Header": {
         "Comment": "All values are metric (mm)",
-        "CreationDate": "2024-10-21T18:50:09Z",
+        "CreationDate": "2024-11-08T09:56:34Z",
         "GenerationSoftware": {
             "Application": "Fusion Electronics",
             "Vendor": "Autodesk",
@@ -13,12 +13,12 @@
         "BoardThickness": 1.57,
         "LayerNumber": 2,
         "Name": {
-            "ProjectId": "Pioneer_Schematic_pcb v8"
+            "ProjectId": "RedLeader_Schematic v8"
         },
         "Owner": "Juan Martínez <juan.martinez.calvo@alumnos.upm.es>",
         "Size": {
-            "X": 130.79,
-            "Y": 84.76
+            "X": 53.32,
+            "Y": 73.33
         }
     }
 }
