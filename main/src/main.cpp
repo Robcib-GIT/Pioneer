@@ -14,7 +14,6 @@ volatile long ISR1counter = 0;
 volatile long ISR2counter = 0;
 
 unsigned long previousTime = 0;
-unsigned long lastTime = 0;
 
 float vel=0;
 
@@ -48,9 +47,6 @@ void setup() {
     
 }
 
-
-//lectura 100HZ
-//control 20HZ
 void loop() {
     // Calcula el incremento de tiempo entre iteraciones del loop
     unsigned long currentTime = micros();
@@ -85,15 +81,10 @@ void loop() {
     float u1=pid1.compute(v1Filt, vel, deltaT);
     float u2=pid2.compute(v2Filt, vel, deltaT);
 
-    if(millis()-lastTime>50UL){
-        microros.publish();
-        lastTime=millis();
-    }
-
     // Actúa sobre el motor
-    //motor((int)u1, (int)u2);
+    motor((int)u1, (int)u2);
 
-    //delay(1);
+    delay(1);
 
 }
 
