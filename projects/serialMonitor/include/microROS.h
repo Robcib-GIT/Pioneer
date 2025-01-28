@@ -7,19 +7,19 @@
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 
-#include <std_msgs/msg/string.h>
 #include <geometry_msgs/msg/twist.h>
+#include <std_msgs/msg/string.h>
 
 #include <iostream>
 
 
 class microRos{
     private:
-        rcl_publisher_t publisher;
         rcl_subscription_t subscriber;
-
-        std_msgs__msg__String serial_monitor_msg;
+        rcl_publisher_t publisher;
         geometry_msgs__msg__Twist cmd_vel_msg;
+        std_msgs__msg__String serial_monitor_msg;
+
 
         rclc_executor_t executor;
         rclc_support_t support;

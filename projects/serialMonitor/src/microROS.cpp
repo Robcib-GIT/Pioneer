@@ -6,7 +6,7 @@ microRos::microRos(){
 }
 
 void microRos::initialize(){
-    Serial.begin(115200);
+    //Serial.begin(115200);
     set_microros_serial_transports(Serial);
 
     allocator = rcl_get_default_allocator();
@@ -27,14 +27,11 @@ void microRos::initialize(){
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
         "serial_monitor");
 
-
-    // create executor
+    //create executor
     rclc_executor_init(&executor, &support.context, 1, &allocator);
     rclc_executor_add_subscription(&executor, &subscriber, &cmd_vel_msg, &microRos::cmd_velCallback, ON_NEW_DATA);
-
 }
 
-// publisher
 void microRos::publish(){
     serial_monitor_msg.data.data = (char *)"Hello World!";
     serial_monitor_msg.data.size = strlen(serial_monitor_msg.data.data);
@@ -50,7 +47,6 @@ void microRos::cmd_velCallback(const void * msgin)
 {  
   const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
   vel= msg->linear.x;
-  //motor(vel, vel);
 }
 
 void microRos::start(){
