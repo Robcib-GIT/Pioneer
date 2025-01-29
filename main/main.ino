@@ -1,353 +1,444 @@
 /*Motor controller using micro_ros serial set_microros_transports*/
+
+#include <geometry_msgs/msg/twist.h>
 #include <micro_ros_arduino.h>
-#include <stdio.h>
-#include <rcl/rcl.h>
 #include <rcl/error_handling.h>
-#include <rclc/rclc.h>
+#include <rcl/rcl.h>
 #include <rclc/executor.h>
-#include <geometry_msgs/msg/twist.h>
-#include <std_msgs/msg/int32.h>
-#include <odometry.h>
-#include <nav_msgs/msg/odometry.h>
-#include <geometry_msgs/msg/twist.h>
-#include <geometry_msgs/msg/vector3.h>
+#include <rclc/rclc.h>
+#include <stdio.h>
 
-//pin declaration
-//Left wheel
-int8_t L_FORW = 19;
-int8_t L_BACK = 18;
-int8_t L_enablePin = 17;
-int8_t L_encoderPin1 = 33;  //Encoder Output of pin1 must connected with interrupt pin of Esp32.
-int8_t L_encoderPin2 = 32;
-//right wheel
-int8_t R_FORW = 23;
-int8_t R_BACK = 22;
-int8_t R_enablePin = 21;
-int8_t R_encoderPin1 = 25;  //Encoder Output of pin1 must connected with interrupt pin of Esp32.
-int8_t R_encoderPin2 = 26;
+#define EXECUTE_EVERY_N_MS(MS, X)          \
+    do {                                   \
+        static volatile int64_t init = -1; \
+        if (init == -1) {                  \
+            init = uxr_millis();           \
+        }                                  \
+        if (uxr_millis() - init > MS) {    \
+            X;                             \
+            init = uxr_millis();           \
+        }                                  \
+    } while (0)
 
-//parameters of the robot
-float wheels_y_distance_ = 0.41;
-float wheel_radius = 0.11;
+bool micro_ros_init_successful;
+enum states {
+    WAITING_AGENT,
+    AGENT_AVAILABLE,
+    AGENT_CONNECTED,
+    AGENT_DISCONNECTED
+} state;
+
+// ROS constants
+
+#define RCCHECK(fn)                    \
+    {                                  \
+        rcl_ret_t temp_rc = fn;        \
+        if ((temp_rc != RCL_RET_OK)) { \
+            error_loop();              \
+        }                              \
+    }
+#define RCSOFTCHECK(fn)                \
+    {                                  \
+        rcl_ret_t temp_rc = fn;        \
+        if ((temp_rc != RCL_RET_OK)) { \
+            error_loop();              \
+        }                              \
+    }
+
+#define LED_PIN 2
+
+#define M1INA 32
+#define M1INB 33
+#define M1PWM 25
+
+#define M2INA 26
+#define M2INB 27
+#define M2PWM 13
+
+// pin declaration
+// Left wheel
+int8_t L_encoderPin1 = 23;  // Encoder Output of pin1 must connected with intreput pin of Esp32.
+int8_t L_encoderPin2 = 22;
+
+// right wheel
+int8_t R_encoderPin1 = 21;  // Encoder Output of pin1 must connected with intreput pin of Esp32.
+int8_t R_encoderPin2 = 19;
+
+// motor_ids
+int8_t motor_id_L = 1;
+int8_t motor_id_R = 2;
+
+// parameters of the robot
+float wheels_y_distance_ = 0.36;
+float wheel_radius = 0.075;
 float wheel_circumference_ = 2 * 3.14 * wheel_radius;
-//encoder value per revolution of left wheel and right wheel
-int tickPerRevolution_LW = 24895;
-int tickPerRevolution_RW = 24895;
-int threshold = 13;
-//pid constants of left wheel
-float kp_l = 3; //1.8
-float ki_l = 5; //5
-float kd_l = 0.11; //0.1
-//pid constants of right wheel
-float kp_r = 4; //2.25
-float ki_r = 5; //5
-float kd_r = 0.11; // 0.1
+// int tickPerRevolution_LW = 612; //working
+int tickPerRevolution_LW = 409;  // working
+int tickPerRevolution_RW = 612;  // working
 
-//pwm parameters setup
-const int freq = 30000;
-const int pwmChannelL = 0;
-const int pwmChannelR = 1;
-const int resolution = 8;
+// for pid calculation
+unsigned long startMillis = 0;
+unsigned long currentMillis = 0;
+unsigned long period = 50;  // period of position publishing in milliseconds
+
+// for odometry publisher
+unsigned long startMillis2 = 0;
+unsigned long currentMillis2 = 0;
+unsigned long period2 = 100;  // period of speed publishing in milliseconds
+
+float setpoint_L;
+float setpoint_R;
+
+int u_max = 100;
+int max_speed = 15;
+
+// pid constants of left wheel
+float kp_l = 7.0;    // 30
+float ki_l = 20.0;   // 60
+float kd_l = 0.005;  // 0.8
+// pid constants of right wheel
+float kp_r = 7.0;    // 30
+float ki_r = 20.0;   // 25
+float kd_r = 0.005;  // 0.05
+
+// constant for speed filter
+float ema_alpha = 0.6;
+
+// motor driver parameters
+volatile long L_encoder_count = 0;
+volatile long R_encoder_count = 0;
+
+// velocity of the motors
+float speed_L_motor;
+float speed_R_motor;
+
+// motor declaration
+const int motorFreq = 1000;     // PWM frequency
+const int motorResolution = 8;  // PWM resolution (bits)
+const int motorChannelA = 0;    // PWM channel for motor A
+const int motorChannelB = 1;    // PWM channel for motor B
+
+void motor_setup() {
+    pinMode(M1INA, OUTPUT);
+    pinMode(M1INB, OUTPUT);
+    pinMode(M1PWM, OUTPUT);
+    ledcSetup(motorChannelA, motorFreq, motorResolution);
+    ledcAttachPin(M1PWM, motorChannelA);
+
+    pinMode(M2INA, OUTPUT);
+    pinMode(M2INB, OUTPUT);
+    pinMode(M2PWM, OUTPUT);
+    ledcSetup(motorChannelB, motorFreq, motorResolution);
+    ledcAttachPin(M2PWM, motorChannelB);
+}
+
+void motor(int vi, int vd) {
+    digitalWrite(M1INA, vi >= 0 ? HIGH : LOW);
+    digitalWrite(M1INB, vi >= 0 ? LOW : HIGH);
+
+    digitalWrite(M2INA, vd >= 0 ? HIGH : LOW);
+    digitalWrite(M2INB, vd >= 0 ? LOW : HIGH);
+
+    ledcWrite(motorChannelA, constrain(abs(vi), 0, 255));
+    ledcWrite(motorChannelB, constrain(abs(vd), 0, 255));
+}
+
+// ROS2 DECLARATIONS
+rcl_publisher_t speed_publisher;
 
 rcl_subscription_t subscriber;
+
 geometry_msgs__msg__Twist msg;
+geometry_msgs__msg__Twist speed_msg;
+
 rclc_executor_t executor;
 rcl_allocator_t allocator;
 rclc_support_t support;
 rcl_node_t node;
-rcl_publisher_t odom_publisher;
-std_msgs__msg__Int32 encodervalue_l;
-std_msgs__msg__Int32 encodervalue_r;
-nav_msgs__msg__Odometry odom_msg;
-rcl_timer_t timer;
-rcl_timer_t ControlTimer;
-unsigned long long time_offset = 0;
-unsigned long prev_cmd_time = 0;
-unsigned long prev_odom_update = 0;
-Odometry odometry;
-
-//creating a class for motor control
-class MotorController {
-public:
-  int8_t Forward;
-  int8_t Backward;
-  int8_t Enable;
-  int8_t EncoderPinA;
-  int8_t EncoderPinB;
-  std_msgs__msg__Int32 EncoderCount;
-  volatile long CurrentPosition;
-  volatile long PreviousPosition;
-  volatile long CurrentTime;
-  volatile long PreviousTime;
-  volatile long CurrentTimeforError;
-  volatile long PreviousTimeForError;
-  float rpmFilt;
-  float eintegral;
-  float ederivative;
-  float rpmPrev;
-  float kp;
-  float ki;
-  float kd;
-  float error;
-  float previousError = 0;
-  int tick;
-
-  MotorController(int8_t ForwardPin, int8_t BackwardPin, int8_t EnablePin, int8_t EncoderA, int8_t EncoderB, int tickPerRevolution) {
-    this->Forward = ForwardPin;
-    this->Backward = BackwardPin;
-    this->Enable = EnablePin;
-    this->EncoderPinA = EncoderA;
-    this->EncoderPinB = EncoderB;
-    this->tick = tickPerRevolution;
-    pinMode(Forward, OUTPUT);
-    pinMode(Backward, OUTPUT);
-    pinMode(EnablePin, OUTPUT);
-    pinMode(EncoderPinA, INPUT);
-    pinMode(EncoderPinB, INPUT);
-  }
-
-  //initializing the parameters of PID controller
-  void initPID(float proportionalGain, float integralGain, float derivativeGain) {
-    kp = proportionalGain;
-    ki = integralGain;
-    kd = derivativeGain;
-  }
-
-  //function return rpm of the motor using the encoder tick values
-  float getRpm() {
-    CurrentPosition = EncoderCount.data;
-    CurrentTime = millis();
-    float delta1 = ((float)CurrentTime - PreviousTime) / 1.0e3;
-    float velocity = ((float)CurrentPosition - PreviousPosition) / delta1;
-    float rpm = (velocity / tick) * 60;
-    rpmFilt = 0.854 * rpmFilt + 0.0728 * rpm + 0.0728 * rpmPrev;
-    float rpmPrev = rpm;
-    PreviousPosition = CurrentPosition;
-    PreviousTime = CurrentTime;
-    // Serial.println(rpmFilt);
-    return rpmFilt;
-  }
-
-  //pid controller
-  float pid(float setpoint, float feedback) {
-    CurrentTimeforError = millis();
-    float delta2 = ((float)CurrentTimeforError - PreviousTimeForError) / 1.0e3;
-    error = setpoint - feedback;
-    eintegral = eintegral + (error * delta2);
-    ederivative = (error - previousError) / delta2;
-    float control_signal = (kp * error) + (ki * eintegral) + (kd * ederivative);
-
-    previousError = error;
-    PreviousTimeForError = CurrentTimeforError;
-    return control_signal;
-  }
-  //move the robot wheels based the control signal generated by the pid controller
-  void moveBase(float ActuatingSignal, int threshold, int pwmChannel) {
-    if (ActuatingSignal > 0) {
-      digitalWrite(Forward, HIGH);
-      digitalWrite(Backward, LOW);
-    } else {
-      digitalWrite(Forward, LOW);
-      digitalWrite(Backward, HIGH);
-    }
-    int pwm = threshold + (int)fabs(ActuatingSignal);
-    if (pwm > 255)
-      pwm = 255;
-    ledcWrite(pwmChannel, pwm);
-  }
-  void stop() {
-    digitalWrite(Forward, LOW);
-    digitalWrite(Backward, LOW);
-  }
-
-  // void plot(float Value1, float Value2){
-  //     Serial.print("Value1:");
-  //     Serial.print(Value1);
-  //     Serial.print(",");
-  //     Serial.print("value2:");
-  //     Serial.println(Value2);
-  // }
-};
-
-//creating objects for right wheel and left wheel
-MotorController leftWheel(L_FORW, L_BACK, L_enablePin, L_encoderPin1, L_encoderPin2, tickPerRevolution_LW);
-MotorController rightWheel(R_FORW, R_BACK, R_enablePin, R_encoderPin1, R_encoderPin2, tickPerRevolution_RW);
-
-#define LED_PIN 2
-#define RCCHECK(fn) \
-  { \
-    rcl_ret_t temp_rc = fn; \
-    if ((temp_rc != RCL_RET_OK)) { error_loop(); } \
-  }
-#define RCSOFTCHECK(fn) \
-  { \
-    rcl_ret_t temp_rc = fn; \
-    if ((temp_rc != RCL_RET_OK)) { error_loop(); } \
-  }
 
 void error_loop() {
-  while (1) {
-    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-    delay(100);
-  }
+    while (1) {
+        digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+        delay(100);
+    }
 }
 
-//subscription callback function
+// creating a class for motor control
+class MotorController {
+   public:
+    int8_t motor_id;
+    int8_t EncoderPinA;
+    int8_t EncoderPinB;
+    volatile long EncoderCount;
+    volatile long CurrentPosition;
+    volatile long PreviousPosition;
+    volatile long CurrentTime;
+    volatile long PreviousTime;
+    volatile long CurrentTimeforError;
+    volatile long PreviousTimeForError;
+    float speed_filtered;
+    float integral;
+    float ederivative;
+    float kp;
+    float ki;
+    float kd;
+    float error;
+    float previousError = 0;
+    int tick;
+
+    MotorController(int8_t Motor_id, int8_t EncoderA, int8_t EncoderB, int tickPerRevolution) {
+        this->motor_id = Motor_id;
+        this->EncoderPinA = EncoderA;
+        this->EncoderPinB = EncoderB;
+        this->tick = tickPerRevolution;
+        pinMode(EncoderPinA, INPUT);
+        pinMode(EncoderPinB, INPUT);
+    }
+
+    // initializing the parameters of PID controller
+    void initPID(float proportionalGain, float integralGain, float derivativeGain) {
+        kp = proportionalGain;
+        ki = integralGain;
+        kd = derivativeGain;
+    }
+
+    // function return rpm of the motor using the encoder tick values
+    float getSpeed() {
+        CurrentPosition = EncoderCount;
+        CurrentTime = millis();
+        float delta1 = ((float)CurrentTime - PreviousTime) / 1.0e3;
+        float velocity = ((float)CurrentPosition - PreviousPosition) / delta1;
+        float speed_unfiltered = (velocity / tick) * (2 * 3.141592);
+        speed_filtered = (ema_alpha)*speed_unfiltered + (1 - ema_alpha) * speed_filtered;
+        PreviousPosition = CurrentPosition;
+        PreviousTime = CurrentTime;
+
+        if (abs(speed_filtered) > max_speed) {
+            speed_filtered = 0;
+        }
+        return speed_filtered;
+    }
+
+    // pid controller
+    float pid(float setpoint, float feedback) {
+        CurrentTimeforError = millis();
+        float delta2 = ((float)CurrentTimeforError - PreviousTimeForError) / 1.0e3;
+        error = setpoint - feedback;
+        integral += (ki * error * delta2);
+        ederivative = (error - previousError) / delta2;
+        float control_signal = (kp * error) + integral + (kd * ederivative);
+
+        // codigo antiwindup
+        if (control_signal > u_max) {
+            integral -= control_signal - u_max;
+            control_signal = u_max;
+        } else if (control_signal < -u_max) {
+            integral += -u_max - control_signal;
+            control_signal = -u_max;
+        }
+
+        previousError = error;
+        PreviousTimeForError = CurrentTimeforError;
+
+        return control_signal;
+    }
+    // move the robot wheels based the control signal generated by the pid controller
+    void moveBase(float ActuatingSignal, int8_t motor_id) {
+        motor(motor_id, ActuatingSignal);
+    }
+    void stop(int8_t motor_id) {
+        motor(0, 0);
+        integral = 0;
+        // previousError=0;
+    }
+};
+
+// creating objects for right wheel and left wheel
+MotorController leftWheel(motor_id_L, L_encoderPin1, L_encoderPin2, tickPerRevolution_LW);
+MotorController rightWheel(motor_id_R, R_encoderPin1, R_encoderPin2, tickPerRevolution_RW);
+
+// interrupt function for left wheel encoder.
+void IRAM_ATTR updateEncoderL() {
+    if (digitalRead(leftWheel.EncoderPinA) > digitalRead(leftWheel.EncoderPinB))
+        leftWheel.EncoderCount++;
+    else
+        leftWheel.EncoderCount--;
+}
+
+// interrupt function for right wheel encoder
+void IRAM_ATTR updateEncoderR() {
+    if (digitalRead(rightWheel.EncoderPinA) > digitalRead(rightWheel.EncoderPinB))
+        rightWheel.EncoderCount--;
+    else
+        rightWheel.EncoderCount++;
+}
+
+void diff_model(float linear_x, float angular_z) {
+    setpoint_L = (linear_x - angular_z * wheels_y_distance_ / 2) / wheel_radius;
+    setpoint_R = (linear_x + angular_z * wheels_y_distance_ / 2) / wheel_radius;
+}
+
+bool create_entities() {
+    allocator = rcl_get_default_allocator();
+
+    rclc_support_init(&support, 0, NULL, &allocator);
+    rclc_node_init_default(&node, "micro_ros_diff_drive", "", &support);
+
+    // create subscriber cmd_vel
+    RCCHECK(rclc_subscription_init_best_effort(
+        &subscriber,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+        "cmd_vel"));
+
+    // create publisher speed
+    RCCHECK(rclc_publisher_init_best_effort(
+        &speed_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+        "debug/speed"));
+
+    // create executor
+    executor = rclc_executor_get_zero_initialized_executor();
+    rclc_executor_init(&executor, &support.context, 1, &allocator);
+    rclc_executor_add_subscription(&executor, &subscriber, &msg, &speed_callback, ON_NEW_DATA);
+
+    return true;
+}
+
+void destroy_entities() {
+    rmw_context_t *rmw_context = rcl_context_get_rmw_context(&support.context);
+    (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
+
+    rcl_publisher_fini(&speed_publisher, &node);
+    rcl_subscription_fini(&subscriber, &node);
+    rclc_executor_fini(&executor);
+    rcl_node_fini(&node);
+    rclc_support_fini(&support);
+}
+
+void ros_speedpub(float speed_L, float speed_R) {
+    speed_msg.linear.x = speed_L;
+    speed_msg.linear.y = speed_R;
+    speed_msg.linear.z = 0.0;
+    speed_msg.angular.x = 0.0;
+    speed_msg.angular.y = 0.0;
+    speed_msg.angular.z = 0.0;
+
+    rcl_publish(&speed_publisher, &speed_msg, NULL);
+}
+
+void speed_callback(const void *msgin) {
+    const geometry_msgs__msg__Twist *msg = (const geometry_msgs__msg__Twist *)msgin;
+    diff_model(msg->linear.x, msg->angular.z);
+}
 
 void setup() {
+    // inicializacion de motor_controller
+    leftWheel.initPID(kp_l, ki_l, kd_l);
+    rightWheel.initPID(kp_r, ki_r, kd_r);
 
-  //initializing the pid constants
-  leftWheel.initPID(kp_l, ki_l, kd_l);
-  rightWheel.initPID(kp_r, ki_r, kd_r);
-  //initializing interrupt functions for counting the encoder tick values
-  attachInterrupt(digitalPinToInterrupt(leftWheel.EncoderPinB), updateEncoderL, RISING); 
-  attachInterrupt(digitalPinToInterrupt(rightWheel.EncoderPinA), updateEncoderR, RISING);
-  //initializing pwm signal parameters
-  ledcSetup(pwmChannelL, freq, resolution);
-  ledcAttachPin(leftWheel.Enable, pwmChannelL);
-  ledcSetup(pwmChannelR, freq, resolution);
-  ledcAttachPin(rightWheel.Enable, pwmChannelR);
+    // set up de hardware
+    motor_setup();
+    // interrupciones para encoders
+    attachInterrupt(digitalPinToInterrupt(leftWheel.EncoderPinA), updateEncoderL, RISING);
+    attachInterrupt(digitalPinToInterrupt(rightWheel.EncoderPinA), updateEncoderR, RISING);
 
-  set_microros_transports();
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, HIGH);
+    // setup de ros
+    set_microros_transports();
 
-  delay(2000);
+    state = WAITING_AGENT;
 
-  allocator = rcl_get_default_allocator();
+    // allocator = rcl_get_default_allocator();
 
-  //create init_options
-  RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
+    // create init_options
+    // rclc_support_init(&support, 0, NULL, &allocator);
 
-  // create node
-  RCCHECK(rclc_node_init_default(&node, "micro_ros_esp32_node", "", &support));
+    // create node
+    // rclc_node_init_default(&node, "micro_ros_diff_drive", "", &support);
 
-  // create subscriber for cmd_vel topic
-  RCCHECK(rclc_subscription_init_default(
-    &subscriber,
-    &node,
-    ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-    "cmd_vel"));
-  //create a odometry publisher
-  RCCHECK(rclc_publisher_init_default(
-    &odom_publisher,
-    &node,
-    ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry),
-    "odom/unfiltered"));
+    // create subscriber cmd_vel
+    // RCCHECK(rclc_subscription_init_best_effort(
+    //   &subscriber,
+    //   &node,
+    //   ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+    //   "cmd_vel"));
 
-  //timer function for controlling the motor base. At every samplingT time
-  //MotorControll_callback function is called
-  //Here I had set SamplingT=10 Which means at every 10 milliseconds MotorControll_callback function is called
-  const unsigned int samplingT = 20;
-  RCCHECK(rclc_timer_init_default(
-    &ControlTimer,
-    &support,
-    RCL_MS_TO_NS(samplingT),
-    MotorControll_callback));
+    // create publisher speed
+    // RCCHECK(rclc_publisher_init_best_effort(
+    //   &speed_publisher,
+    //   &node,
+    //   ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+    //   "debug/speed"));
 
-  // create executor
-  RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
-  RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg, &subscription_callback, ON_NEW_DATA));
-  // RCCHECK(rclc_executor_add_timer(&executor, &timer));
-  RCCHECK(rclc_executor_add_timer(&executor, &ControlTimer));
+    // create publisher odom
+    // RCCHECK(rclc_publisher_init_default(
+    //   &odom_publisher,
+    //   &node,
+    //   ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry),
+    //   "odom/unfiltered"));
+
+    // create executor
+    // rclc_executor_init(&executor, &support.context, 1, &allocator);
+    // rclc_executor_add_subscription(&executor, &subscriber, &msg, &speed_callback, ON_NEW_DATA);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  delay(100);
-  RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100)));
-}
+    switch (state) {
+        case WAITING_AGENT:
+            EXECUTE_EVERY_N_MS(500, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_AVAILABLE : WAITING_AGENT;);
+            break;
+        case AGENT_AVAILABLE:
+            state = (true == create_entities()) ? AGENT_CONNECTED : WAITING_AGENT;
+            if (state == WAITING_AGENT) {
+                destroy_entities();
+            };
+            break;
+        case AGENT_CONNECTED:
+            EXECUTE_EVERY_N_MS(200, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
+            if (state == AGENT_CONNECTED) {
+                RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(50)));
+            }
+            break;
+        case AGENT_DISCONNECTED:
+            destroy_entities();
+            state = WAITING_AGENT;
+            break;
+        default:
+            break;
+    }
 
-void subscription_callback(const void* msgin) {
-  prev_cmd_time = millis();
-}
+    delay(0);
 
-//function which controlles the motor
-void MotorControll_callback(rcl_timer_t* timer, int64_t last_call_time) {
-  float linearVelocity;
-  float angularVelocity;
-  //linear velocity and angular velocity send cmd_vel topic
-  linearVelocity = msg.linear.x;
-  angularVelocity = msg.angular.z;
-  //linear and angular velocities are converted to leftwheel and rightwheel velocities
-  float vL = (linearVelocity - (angularVelocity * 1 / 2)) * 20;
-  float vR = (linearVelocity + (angularVelocity * 1 / 2)) * 20;
-  //current wheel rpm is calculated
-  float currentRpmL = leftWheel.getRpm();
-  float currentRpmR = rightWheel.getRpm();
-  //pid controlled is used for generating the pwm signal
-  float actuating_signal_LW = leftWheel.pid(vL, currentRpmL);
-  float actuating_signal_RW = rightWheel.pid(vR, currentRpmR);
-  if (vL == 0 && vR == 0) {
-    leftWheel.stop();
-    rightWheel.stop();
-    actuating_signal_LW = 0;
-    actuating_signal_RW = 0;
-  } else {
-    rightWheel.moveBase(actuating_signal_RW, threshold, pwmChannelR);
-    leftWheel.moveBase(actuating_signal_LW, threshold, pwmChannelL);
-  }
-  //odometry
-  float average_rps_x = ((float)(currentRpmL + currentRpmR) / 2) / 60.0;  // RPM
-  float linear_x = average_rps_x * wheel_circumference_;                  // m/s
-  float average_rps_a = ((float)(-currentRpmL + currentRpmR) / 2) / 60.0;
-  float angular_z = (average_rps_a * wheel_circumference_) / (wheels_y_distance_ / 2.0);  //  rad/s
-  float linear_y = 0;
-  unsigned long now = millis();
-  float vel_dt = (now - prev_odom_update) / 1000.0;
-  prev_odom_update = now;
-  odometry.update(
-    vel_dt,
-    linear_x,
-    linear_y,
-    angular_z);
-  publishData();
-}
+    if (state == AGENT_CONNECTED) {
+        currentMillis = millis();
 
-//interrupt function for left wheel encoder.
-void updateEncoderL() {
-  if (digitalRead(leftWheel.EncoderPinB) > digitalRead(leftWheel.EncoderPinA))
-    leftWheel.EncoderCount.data++;
-  else
-    leftWheel.EncoderCount.data--;
-  encodervalue_l = leftWheel.EncoderCount;
-}
+        if (currentMillis - startMillis >= period) {
+            speed_L_motor = leftWheel.getSpeed();
+            speed_R_motor = rightWheel.getSpeed();
 
-//interrupt function for right wheel encoder
-void updateEncoderR() {
-  if (digitalRead(rightWheel.EncoderPinA) > digitalRead(rightWheel.EncoderPinB))
-    rightWheel.EncoderCount.data++;
-  else
-    rightWheel.EncoderCount.data--;
-  encodervalue_r = rightWheel.EncoderCount;
-}
+            float signal_L_motor = leftWheel.pid(setpoint_L, speed_L_motor);
+            float signal_R_motor = rightWheel.pid(setpoint_R, speed_R_motor);
 
-//function which publishes wheel odometry.
-void publishData() {
-  odom_msg = odometry.getData();
-  ;
+            if (setpoint_L == 0 && setpoint_R == 0) {
+                leftWheel.stop(motor_id_L);
+                rightWheel.stop(motor_id_R);
+            } else {
+                leftWheel.moveBase(signal_L_motor, motor_id_L);
+                rightWheel.moveBase(signal_R_motor, motor_id_R);
+            }
 
-  struct timespec time_stamp = getTime();
+            startMillis = currentMillis;
+        }
 
-  odom_msg.header.stamp.sec = time_stamp.tv_sec;
-  odom_msg.header.stamp.nanosec = time_stamp.tv_nsec;
-  RCSOFTCHECK(rcl_publish(&odom_publisher, &odom_msg, NULL));
-}
-void syncTime() {
-  // get the current time from the agent
-  unsigned long now = millis();
-  RCCHECK(rmw_uros_sync_session(10));
-  unsigned long long ros_time_ms = rmw_uros_epoch_millis();
-  // now we can find the difference between ROS time and uC time
-  time_offset = ros_time_ms - now;
-}
-
-struct timespec getTime() {
-  struct timespec tp = { 0 };
-  // add time difference between uC time and ROS time to
-  // synchronize time with ROS
-  unsigned long long now = millis() + time_offset;
-  tp.tv_sec = now / 1000;
-  tp.tv_nsec = (now % 1000) * 1000000;
-  return tp;
+        // Funcion para publicar la velocidad
+        currentMillis2 = millis();
+        if (currentMillis2 - startMillis2 >= period2) {
+            ros_speedpub(speed_L_motor, speed_R_motor);
+            startMillis2 = currentMillis2;
+        }
+    } else {
+        leftWheel.stop(motor_id_L);
+        rightWheel.stop(motor_id_R);
+    }
 }

@@ -1,7 +1,7 @@
-#define M1INA 19
-#define M1INB 18
-#define M1PWM 17
+#define M1INA 32
+#define M1INB 33
+#define M1PWM 25
 
-#define M2INA 23
-#define M2INB 22
-#define M2PWM 21
+#define M2INA 26
+#define M2INB 27
+#define M2PWM 13

@@ -12,8 +12,8 @@ void setup() {
     pinMode(ENC2B, INPUT);
     // Si los declaramos como INPUT_PULLUP, al no recibir ningún pulso, el valor será HIGH
 
-    attachInterrupt(digitalPinToInterrupt(ENC1A), doEncodeA, RISING);
-    // attachInterrupt(digitalPinToInterrupt(ENC1B), doEncodeB, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(ENC2A), doEncodeA, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(ENC2B), doEncodeB, CHANGE);
     // Cuidado que hay que dividir entre 2, 4 según lo que contemos
 }
 
