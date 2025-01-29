@@ -1,4 +1,6 @@
 /*Motor controller using micro_ros serial set_microros_transports*/
+// CODIGO INDIO
+
 #include <micro_ros_arduino.h>
 #include <stdio.h>
 #include <rcl/rcl.h>
@@ -14,17 +16,17 @@
 
 //pin declaration
 //Left wheel
-int8_t L_FORW = 19;
-int8_t L_BACK = 18;
-int8_t L_enablePin = 17;
-int8_t L_encoderPin1 = 33;  //Encoder Output of pin1 must connected with interrupt pin of Esp32.
-int8_t L_encoderPin2 = 32;
+int8_t L_FORW = 32;
+int8_t L_BACK = 33;
+int8_t L_enablePin = 25;
+int8_t L_encoderPin1 = 22;  //Encoder Output of pin1 must connected with interrupt pin of Esp32.
+int8_t L_encoderPin2 = 23;
 //right wheel
-int8_t R_FORW = 23;
-int8_t R_BACK = 22;
-int8_t R_enablePin = 21;
-int8_t R_encoderPin1 = 25;  //Encoder Output of pin1 must connected with interrupt pin of Esp32.
-int8_t R_encoderPin2 = 26;
+int8_t R_FORW = 26;
+int8_t R_BACK = 27;
+int8_t R_enablePin = 13;
+int8_t R_encoderPin1 = 21;  //Encoder Output of pin1 must connected with interrupt pin of Esp32.
+int8_t R_encoderPin2 = 19;
 
 //parameters of the robot
 float wheels_y_distance_ = 0.41;
