@@ -10,15 +10,17 @@ The goal of this project, conducted at the Center for Automation and Robotics (C
 - [**main**](main/): main codebase and core functionalities.
 - [**projects**](projects/): specific projects or experiments related to the robot.
 - [**pcb_design**](pcb_design/): contains the design files for the PCB. See [`pcb_design/README.md`](pcb_design/README.md) for more details.
-
+  
 ## Usage
 1. Follow the instructions in [`pcb_design/README.md`](pcb_design/README.md) for PCB manufacturing and assembly.
-2. Program the ESP32 using the files in the [`main`](main/) folder.
+2. Program the ESP32 using the files in the [`main`](main) folder.
 3. Access the Raspberry Pi via SSH:
+
     ```bash
     ssh robcib@192.168.2.120
     ```
 4. Launch the ROS2 bringup:
+
     ```bash
     ros2 launch lynxmotion_care robot_bringup.launch.py
     ```
@@ -33,5 +35,6 @@ The goal of this project, conducted at the Center for Automation and Robotics (C
 - **Voltage Regulator**: 24V to 12V for motor power, 5V for Raspberry Pi power.
 
 ### Power Connection Diagram
-![Power Connection Diagram](docs/PowerDiagram.png)
 For detailed connection diagrams, refer to the schematic in [`pcb_design/RedLeaderSchematic.pdf`](pcb_design/RedLeaderSchematic.pdf).
+![Power Connection Diagram](docs/PowerDiagram.png)
+
