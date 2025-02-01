@@ -8,9 +8,9 @@ This PCB is designed for a differential mobile robot with four DC motors and two
 
 ## Files
 
-- [**Gerber Files**](pcb_designs/GerberFiles/): Necessary for PCB fabrication.
-- [**Drill Files**](pcb_designs/DrillFiles/): Necessary for PCB drilling.
-- [**Schematic**](pcb_designs/RedLeaderSchematic.pdf): Provides the connection diagram for components.
+- [**Gerber Files**](GerberFiles): Necessary for PCB fabrication.
+- [**Drill Files**](DrillFiles): Necessary for PCB drilling.
+- [**Schematic**](RedLeaderSchematic.pdf): Provides the connection diagram for components.
 - **Design Details**: See below for PCB specifications.
 
 ## Specifications
@@ -32,5 +32,5 @@ This PCB is designed for a differential mobile robot with four DC motors and two
 
 ## Usage
 
-1. **Manufacturing**: Upload the [Gerber files](pcb_designs/GerberFiles/) and the [Drill files](pcb_designs/DrillFiles/) to a PCB manufacturer (e.g., JLCPCB).
-2. **Assembly**: Refer to the [schematic](pcb_designs/RedLeaderSchematic.pdf) for guidance on component placement.
+1. **Manufacturing**: Upload the [Gerber files](GerberFiles) and the [Drill files](DrillFiles) to a PCB manufacturer (e.g., JLCPCB).
+2. **Assembly**: Refer to the [schematic](RedLeaderSchematic.pdf) for guidance on component placement.
