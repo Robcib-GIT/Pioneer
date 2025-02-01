@@ -3,17 +3,17 @@
 This directory contains various PlatformIO projects related to the Pioneer Robot Project. These projects have been instrumental in gradually developing and refining the code, as well as for debugging purposes. Below is a brief description of each project and some useful links on how to work with PlatformIO.
 
 ## Projects
-- [**encoderCount**](encoderCount): For calculating the encoder count of a DC motor.
-- [**encoderPID**](encoderPID): Velocity control of two DC motors using a PID class.
+- [**encoderCount**](encoderCount): for calculating the encoder count of a DC motor.
+- [**encoderPID**](encoderPID): velocity control of two DC motors using a PID class.
 - [**microROS**](microROS): cmd_vel subscriber.
-- [**motorTest**](motorTest): Tests 2-motor movement.
+- [**motorTest**](motorTest): tests 2-motor movement.
 
 ## Working with PlatformIO
 PlatformIO is a powerful development environment for microcontrollers. Here are some resources to help you get started:
 
-- [PlatformIO Quick Start Guide](https://docs.platformio.org/en/latest/core/quickstart.html): A comprehensive guide to getting started with PlatformIO.
-- [PlatformIO Tutorials and Examples](https://docs.platformio.org/en/latest/tutorials/index.html): Official tutorials and examples for various boards and frameworks.
-- [Getting Started with PlatformIO (Video)](https://www.youtube.com/watch?v=JmvMvIphMnY): A detailed video tutorial on how to use PlatformIO with Visual Studio Code.
+- [PlatformIO Quick Start Guide](https://docs.platformio.org/en/latest/core/quickstart.html): a comprehensive guide to getting started with PlatformIO.
+- [PlatformIO Tutorials and Examples](https://docs.platformio.org/en/latest/tutorials/index.html): official tutorials and examples for various boards and frameworks.
+- [Getting Started with PlatformIO (Video)](https://www.youtube.com/watch?v=JmvMvIphMnY): a detailed video tutorial on how to use PlatformIO with Visual Studio Code.
 
 ## How to Use These Projects
 1. **Clone the Repository**:
