@@ -4,12 +4,12 @@
 The goal of this project, conducted at the Center for Automation and Robotics (CAR), is to update the differential robot Pioneer 3-AT to ROS2. The robot was previously running on ROS1. This update involves using a Raspberry Pi 5 and an ESP32, which communicate with each other using microRos.
 
 ## Project Structure
-- [**3d_files/**](3d_files/): contains the 3D models used in the project
-- [**docs/**](docs/): documentation related to the project
-- [**legacy/**](legacy/): contains older versions and historical files
-- [**main/**](main/): main codebase and core functionalities
-- [**projects/**](projects/): specific projects or experiments related to the robot
-- [**pcb_design/**](pcb_design/): contains the design files for the PCB. See [`pcb_design/README.md`](pcb_design/README.md) for more details
+- [**3d_files**](3d_files/): contains the 3D models used in the project
+- [**docs**](docs/): documentation related to the project
+- [**legacy**](legacy/): contains older versions and historical files
+- [**main**](main/): main codebase and core functionalities
+- [**projects**](projects/): specific projects or experiments related to the robot
+- [**pcb_design**](pcb_design/): contains the design files for the PCB. See [`pcb_design/README.md`](pcb_design/README.md) for more details
 
 ## Usage
 1. Follow the instructions in [`pcb_design/README.md`](pcb_design/README.md) for PCB manufacturing and assembly.
