@@ -3,10 +3,10 @@
 This directory contains various PlatformIO projects related to the Pioneer Robot Project. These projects have been instrumental in gradually developing and refining the code, as well as for debugging purposes. Below is a brief description of each project and some useful links on how to work with PlatformIO.
 
 ## Projects
-- [**encoderCount**](projects/encoderCount): For calculating the encoder count of a DC motor.
-- [**encoderPID**](projects/encoderPID): Velocity control of two DC motors using a PID class.
-- [**microROS**](projects/microROS): cmd_vel subscriber.
-- [**motorTest**](projects/motorTest): Tests 2-motor movement.
+- [**encoderCount**](encoderCount): For calculating the encoder count of a DC motor.
+- [**encoderPID**](encoderPID): Velocity control of two DC motors using a PID class.
+- [**microROS**](microROS): cmd_vel subscriber.
+- [**motorTest**](motorTest): Tests 2-motor movement.
 
 ## Working with PlatformIO
 PlatformIO is a powerful development environment for microcontrollers. Here are some resources to help you get started:
